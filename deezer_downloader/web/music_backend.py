@@ -94,11 +94,21 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
     if search_type == TYPE_TRACK:
         absolute_filename = os.path.join(config["download_dirs"]["songs"], song_filename)
     elif search_type == TYPE_ALBUM:
-        album_name = "{} - {}".format(song['ART_NAME'], song['ALB_TITLE'])
-        album_name = clean_filename(album_name)
-        album_dir = os.path.join(config["download_dirs"]["albums"], album_name)
+        # Use album artist (ALB_ART_NAME) if available, otherwise use track artist (ART_NAME)
+        album_artist = song.get('ALB_ART_NAME', song['ART_NAME'])
+        album_artist = clean_filename(album_artist)
+        album_title = clean_filename(song['ALB_TITLE'])
+
+        # Create artist directory if it doesn't exist
+        artist_dir = os.path.join(config["download_dirs"]["albums"], album_artist)
+        if not os.path.exists(artist_dir):
+            os.makedirs(artist_dir, exist_ok=True)
+
+        # Create album directory inside artist directory
+        album_dir = os.path.join(artist_dir, album_title)
         if not os.path.exists(album_dir):
             os.mkdir(album_dir)
+
         absolute_filename = os.path.join(album_dir, song_filename)
     elif search_type == TYPE_PLAYLIST:
         assert type(playlist_name) is str
@@ -117,10 +127,36 @@ def download_song_and_get_absolute_filename(search_type, song, playlist_name=Non
 
 
 def create_zip_file(songs_absolute_location):
-    # take first song in list and take the parent dir (name of album/playlist")
-    parent_dir = basename(os.path.dirname(songs_absolute_location[0]))
-    location_zip_file = os.path.join(config["download_dirs"]["zips"], "{}.zip".format(parent_dir))
+    # Get the path of the first song
+    first_song_path = songs_absolute_location[0]
+    album_dir = os.path.dirname(first_song_path)
+
+    # Check if we're using the new hierarchical structure (artist/album)
+    # or the old flat structure (artist - album) or a playlist
+    album_path_parts = album_dir.split(os.path.sep)
+    if album_dir.startswith(config["download_dirs"]["albums"]) and len(album_path_parts) >= 2:
+        # We're in the albums directory, check if we have a hierarchical structure
+        albums_dir_parts = config["download_dirs"]["albums"].split(os.path.sep)
+        relative_path_parts = album_path_parts[len(albums_dir_parts):]
+
+        if len(relative_path_parts) >= 2:
+            # Hierarchical structure (artist/album)
+            artist_name = relative_path_parts[0]
+            album_name = relative_path_parts[1]
+            zip_name = f"{artist_name} - {album_name}"
+            parent_dir = album_name
+        else:
+            # Flat structure (artist - album) or single directory
+            parent_dir = basename(album_dir)
+            zip_name = parent_dir
+    else:
+        # Not in albums directory (probably a playlist)
+        parent_dir = basename(album_dir)
+        zip_name = parent_dir
+
+    location_zip_file = os.path.join(config["download_dirs"]["zips"], "{}.zip".format(zip_name))
     print("Creating zip file '{}'".format(location_zip_file))
+
     with ZipFile(location_zip_file, 'w', compression=ZIP_DEFLATED) as zip:
         for song_location in songs_absolute_location:
             try:

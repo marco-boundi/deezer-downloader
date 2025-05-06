@@ -1,5 +1,9 @@
 {% extends '__autoindex__/autoindex.html' %}
 
+{% block head %}
+{{ super() }}
+<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/dark-mode.css') }}" />
+{% endblock %}
 
 {% block footer %}
 <br>
@@ -8,4 +12,3 @@
 </div>
 
 {% endblock %}
-
