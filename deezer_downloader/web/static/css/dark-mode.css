@@ -1,0 +1,169 @@
+/* Dark mode styles for Deezer Downloader */
+
+/* Base styles */
+body {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+/* Container background */
+.container {
+    background-color: #1e1e1e;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* Navigation tabs */
+.nav-tabs {
+    border-bottom: 1px solid #444;
+}
+
+.nav-tabs .nav-link {
+    color: #b0b0b0;
+    background-color: #2d2d2d;
+    border-color: #444;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #ffffff;
+    background-color: #3d3d3d;
+    border-color: #555;
+}
+
+.nav-tabs .nav-link.active {
+    color: #ffffff;
+    background-color: #3a3a3a;
+    border-color: #444 #444 #3a3a3a;
+}
+
+/* Tables */
+.table {
+    color: #e0e0e0;
+}
+
+.table thead th {
+    border-bottom: 2px solid #444;
+    background-color: #2d2d2d;
+}
+
+.table td, .table th {
+    border-top: 1px solid #444;
+}
+
+/* Form controls */
+.form-control {
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    color: #e0e0e0;
+}
+
+.form-control:focus {
+    background-color: #3d3d3d;
+    color: #ffffff;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-control::placeholder {
+    color: #888;
+}
+
+/* Buttons */
+.btn-info {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+.btn-info:hover {
+    background-color: #138496;
+    border-color: #117a8b;
+}
+
+/* Default buttons (used in results table) */
+.btn-default {
+    background-color: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+.btn-default:hover {
+    background-color: #3d3d3d;
+    border-color: #555;
+    color: #ffffff;
+}
+
+/* Icons in results table */
+.btn-default .fa {
+    color: #e0e0e0;
+}
+
+.btn-default:hover .fa {
+    color: #ffffff;
+}
+
+/* Footer */
+.footer {
+    background-color: #2d2d2d !important;
+    color: #b0b0b0;
+    border-top: 1px solid #444;
+}
+
+.text-muted {
+    color: #b0b0b0 !important;
+}
+
+/* Audio player */
+audio {
+    background-color: #2d2d2d;
+    border-radius: 4px;
+}
+
+/* Debug textarea */
+textarea.form-control {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border: 1px solid #444;
+}
+
+/* Links */
+a {
+    color: #5e9ed6;
+}
+
+a:hover {
+    color: #7eb3e6;
+}
+
+/* Notifications */
+.jGrowl-notification {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border: 1px solid #444;
+}
+
+/* Autoindex page */
+.__autoindex__ {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+.__autoindex__ a {
+    color: #5e9ed6;
+}
+
+.__autoindex__ a:hover {
+    color: #7eb3e6;
+}
+
+.__autoindex__ table {
+    color: #e0e0e0;
+}
+
+.__autoindex__ th {
+    background-color: #2d2d2d;
+    border-bottom: 2px solid #444;
+}
+
+.__autoindex__ td {
+    border-top: 1px solid #444;
+}
