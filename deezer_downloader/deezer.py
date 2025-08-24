@@ -345,30 +345,51 @@ def writeid3v2(fo, song):
 
 
 def get_song_url(track_token: str, quality: int = 3) -> str:
-    try:
-        response = requests.post(
-            "https://media.deezer.com/v1/get_url",
-            json={
-                'license_token': license_token,
-                'media': [{
-                    'type': "FULL",
-                    "formats": [
-                        {"cipher": "BF_CBC_STRIPE", "format": sound_format}]
-                }],
-                'track_tokens': [track_token,]
-            },
-            headers={"User-Agent": USER_AGENT},
-        )
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Could not retrieve song URL: {e}")
+    max_retries = 3
+    retry_delay = 1  # seconds
+    last_exception = None
 
-    if not data.get('data') or 'errors' in data['data'][0]:
-        raise RuntimeError(f"Could not get download url from API: {data['data'][0]['errors'][0]['message']}")
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                "https://media.deezer.com/v1/get_url",
+                json={
+                    'license_token': license_token,
+                    'media': [{
+                        'type': "FULL",
+                        "formats": [
+                            {"cipher": "BF_CBC_STRIPE", "format": sound_format}]
+                    }],
+                    'track_tokens': [track_token,]
+                },
+                headers={"User-Agent": USER_AGENT},
+            )
+            response.raise_for_status()
+            data = response.json()
 
-    url = data['data'][0]['media'][0]['sources'][0]['url']
-    return url
+            if not data.get('data') or 'errors' in data['data'][0]:
+                raise RuntimeError(f"Could not get download url from API: {data['data'][0]['errors'][0]['message']}")
+
+            url = data['data'][0]['media'][0]['sources'][0]['url']
+            return url
+
+        except (requests.exceptions.ConnectionError, json.JSONDecodeError) as e:
+            last_exception = e
+            # Only retry on connection errors or JSON decode errors
+            if attempt < max_retries - 1:
+                print(f"Connection error when getting URL for track token. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                import time
+                time.sleep(retry_delay)
+            else:
+                # If we've exhausted our retries, raise the exception
+                raise RuntimeError(f"Could not retrieve song URL: {e}") from e
+        except requests.exceptions.RequestException as e:
+            # Don't retry on other request exceptions
+            raise RuntimeError(f"Could not retrieve song URL: {e}") from e
+
+    # This will only execute if the for loop completes without a return
+    # This means all retries failed
+    raise RuntimeError(f"Could not retrieve song URL after {max_retries} attempts: {last_exception}") from last_exception
 
 
 def download_song(song: dict, output_file: str) -> None:
@@ -397,26 +418,49 @@ def download_song(song: dict, output_file: str) -> None:
     key = calcbfkey(song["SNG_ID"])
     is_flac = get_file_extension() == "flac"
 
-    try:
-        with session.get(url, stream=True) as response:
-            response.raise_for_status()
-            with open(output_file, "w+b") as fo:
-                if is_flac:
-                    # For FLAC files, we'll add metadata after downloading
-                    decryptfile(response, key, fo)
-                else:
-                    # For MP3 files, add ID3 tags as before
-                    writeid3v2(fo, song)
-                    decryptfile(response, key, fo)
-                    writeid3v1_1(fo, song)
+    max_retries = 3
+    retry_delay = 1  # seconds
+    last_exception = None
 
-        # Add metadata to FLAC files using mutagen
-        if is_flac:
-            add_flac_metadata(output_file, song)
-    except Exception as e:
-        raise DeezerApiException(f"Could not write song to disk: {e}") from e
-    else:
-        print("Download finished: {}".format(output_file))
+    for attempt in range(max_retries):
+        try:
+            with session.get(url, stream=True) as response:
+                response.raise_for_status()
+                with open(output_file, "w+b") as fo:
+                    if is_flac:
+                        # For FLAC files, we'll add metadata after downloading
+                        decryptfile(response, key, fo)
+                    else:
+                        # For MP3 files, add ID3 tags as before
+                        writeid3v2(fo, song)
+                        decryptfile(response, key, fo)
+                        writeid3v1_1(fo, song)
+
+            # Add metadata to FLAC files using mutagen
+            if is_flac:
+                add_flac_metadata(output_file, song)
+
+            # If we get here, the download was successful
+            print("Download finished: {}".format(output_file))
+            return
+
+        except requests.exceptions.ConnectionError as e:
+            last_exception = e
+            # Only retry on connection errors
+            if attempt < max_retries - 1:
+                print(f"Connection error when downloading song (https://www.deezer.com/us/track/{song['SNG_ID']}). Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                import time
+                time.sleep(retry_delay)
+            else:
+                # If we've exhausted our retries, raise the exception
+                raise DeezerApiException(f"Could not write song to disk: {e}") from e
+        except Exception as e:
+            # Don't retry on other exceptions
+            raise DeezerApiException(f"Could not write song to disk: {e}") from e
+
+    # This will only execute if the for loop completes without a return
+    # This means all retries failed
+    raise DeezerApiException(f"Could not write song to disk after {max_retries} attempts: {last_exception}") from last_exception
 
 
 def add_flac_metadata(output_file: str, song: dict) -> None:
@@ -499,32 +543,59 @@ def get_song_infos_from_deezer_website(search_type, id):
     # 2. Deezer gives you a 404: https://www.deezer.com/de/track/68925038
     # Deezer403Exception if we are not logged in
 
+    max_retries = 3
+    retry_delay = 1  # seconds
+    last_exception = None
+
     url = "https://www.deezer.com/us/{}/{}".format(search_type, id)
-    resp = session.get(url)
-    if resp.status_code == 404:
-        raise Deezer404Exception("ERROR: Got a 404 for {} from Deezer".format(url))
-    if "MD5_ORIGIN" not in resp.text:
-        raise Deezer403Exception("ERROR: we are not logged in on deezer.com. Please update the cookie")
 
-    parser = ScriptExtractor()
-    parser.feed(resp.text)
-    parser.close()
+    for attempt in range(max_retries):
+        try:
+            resp = session.get(url)
+            if resp.status_code == 404:
+                raise Deezer404Exception("ERROR: Got a 404 for {} from Deezer".format(url))
+            if "MD5_ORIGIN" not in resp.text:
+                raise Deezer403Exception("ERROR: we are not logged in on deezer.com. Please update the cookie")
 
-    songs = []
-    for script in parser.scripts:
-        regex = re.search(r'{"DATA":.*', script)
-        if regex:
-            DZR_APP_STATE = json.loads(regex.group())
-            global album_Data
-            album_Data = DZR_APP_STATE.get("DATA")
-            if DZR_APP_STATE['DATA']['__TYPE__'] == 'playlist' or DZR_APP_STATE['DATA']['__TYPE__'] == 'album':
-                # songs if you searched for album/playlist
-                for song in DZR_APP_STATE['SONGS']['data']:
-                    songs.append(song)
-            elif DZR_APP_STATE['DATA']['__TYPE__'] == 'song':
-                # just one song on that page
-                songs.append(DZR_APP_STATE['DATA'])
-    return songs[0] if search_type == TYPE_TRACK else songs
+            parser = ScriptExtractor()
+            parser.feed(resp.text)
+            parser.close()
+
+            songs = []
+            for script in parser.scripts:
+                regex = re.search(r'{"DATA":.*', script)
+                if regex:
+                    DZR_APP_STATE = json.loads(regex.group())
+                    global album_Data
+                    album_Data = DZR_APP_STATE.get("DATA")
+                    if DZR_APP_STATE['DATA']['__TYPE__'] == 'playlist' or DZR_APP_STATE['DATA']['__TYPE__'] == 'album':
+                        # songs if you searched for album/playlist
+                        for song in DZR_APP_STATE['SONGS']['data']:
+                            songs.append(song)
+                    elif DZR_APP_STATE['DATA']['__TYPE__'] == 'song':
+                        # just one song on that page
+                        songs.append(DZR_APP_STATE['DATA'])
+
+            # If we get here, the request was successful
+            return songs[0] if search_type == TYPE_TRACK else songs
+
+        except (requests.exceptions.ConnectionError, json.JSONDecodeError) as e:
+            last_exception = e
+            # Only retry on connection errors or JSON decode errors
+            if attempt < max_retries - 1:
+                print(f"Connection error when getting info for '{id}'. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                import time
+                time.sleep(retry_delay)
+            else:
+                # If we've exhausted our retries, raise the exception
+                raise DeezerApiException(f"Could not get info for '{id}': {e}") from e
+        except (Deezer404Exception, Deezer403Exception) as e:
+            # Don't retry on 404 or 403 errors
+            raise e
+
+    # This will only execute if the for loop completes without a return
+    # This means all retries failed
+    raise DeezerApiException(f"Could not get info for '{id}' after {max_retries} attempts: {last_exception}") from last_exception
 
 
 def deezer_search(search, search_type):
@@ -536,16 +607,36 @@ def deezer_search(search, search_type):
         print("ERROR: search_type is wrong: {}".format(search_type))
         return []
     search = urllib.parse.quote_plus(search)
-    try:
-        if search_type == TYPE_ALBUM_TRACK:
-            data = get_song_infos_from_deezer_website(TYPE_ALBUM, search)
-        else:
-            resp = session.get("https://api.deezer.com/search/{}?q={}".format(search_type, search))
-            resp.raise_for_status()
-            data = resp.json()
-            data = data['data']
-    except (requests.exceptions.RequestException, KeyError) as e:
-        raise DeezerApiException(f"Could not search for track '{search}': {e}") from e
+
+    max_retries = 3
+    retry_delay = 1  # seconds
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            if search_type == TYPE_ALBUM_TRACK:
+                data = get_song_infos_from_deezer_website(TYPE_ALBUM, search)
+            else:
+                resp = session.get("https://api.deezer.com/search/{}?q={}".format(search_type, search))
+                resp.raise_for_status()
+                data = resp.json()
+                data = data['data']
+            # If we get here, the request was successful
+            break
+        except (requests.exceptions.RequestException, KeyError) as e:
+            last_exception = e
+            # Only retry on connection errors
+            if isinstance(e, requests.exceptions.ConnectionError) and attempt < max_retries - 1:
+                print(f"Connection error when searching for '{search}'. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                import time
+                time.sleep(retry_delay)
+            else:
+                # If it's not a connection error or we've exhausted our retries, raise the exception
+                raise DeezerApiException(f"Could not search for track '{search}': {e}") from e
+    else:
+        # This will only execute if the for loop completes without a break
+        # This means all retries failed
+        raise DeezerApiException(f"Could not search for track '{search}' after {max_retries} attempts: {last_exception}") from last_exception
     return_nice = []
     for item in data:
         i = {}
