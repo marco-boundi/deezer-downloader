@@ -261,6 +261,10 @@ class TestSpotifyMethods(unittest.TestCase):
         self.assertEqual(res['id'], "Hksdhfaif23ffushef9823")
 
     def _test_parse_spotify_playlist_website(self, playlist):
+        import os
+        has_client = bool(os.environ.get("SPOTIFY_CLIENT_ID")) and bool(os.environ.get("SPOTIFY_CLIENT_SECRET"))
+        if not has_client:
+            pytest.skip("Skipping Spotify tests: client credentials are not set")
         songs = get_songs_from_spotify_website(playlist, None)
         self.assertIn("Cyndi Lauper Time After Time", songs)
 

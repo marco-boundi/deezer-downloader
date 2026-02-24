@@ -4,7 +4,7 @@ import hmac
 import hashlib
 from time import sleep
 from urllib.parse import urlparse, parse_qs
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Optional
 
 import requests
 
@@ -37,6 +37,7 @@ def generate_totp(
 
 
 token_url = 'https://open.spotify.com/get_access_token'
+accounts_token_url = 'https://accounts.spotify.com/api/token'
 playlist_base_url = 'https://api.spotify.com/v1/playlists/{}/tracks?limit=100&additional_types=track' # todo figure out market
 track_base_url = 'https://api.spotify.com/v1/tracks/{}'
 album_base_url = 'https://api.spotify.com/v1/albums/{}/tracks'
@@ -50,7 +51,8 @@ headers = {
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
     'Referer': 'https://open.spotify.com/',
-    'Origin': 'https://open.spotify.com'
+    'Origin': 'https://open.spotify.com',
+    'DNT': '1'
 }
 
 
@@ -110,21 +112,43 @@ def get_songs_from_spotify_website(playlist, proxy=None):
     return_data = []
     url_info = parse_uri(playlist)
 
-    totp, timestamp = generate_totp()
+    # Official Spotify Web API with Client Credentials (only supported flow)
+    import os
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", "").strip()
+    try:
+        from deezer_downloader.configuration import config as _cfg3
+        if _cfg3 and _cfg3.has_section('spotify'):
+            if not client_id and _cfg3.has_option('spotify', 'client_id'):
+                client_id = _cfg3.get('spotify', 'client_id', fallback='').strip()
+            if not client_secret and _cfg3.has_option('spotify', 'client_secret'):
+                client_secret = _cfg3.get('spotify', 'client_secret', fallback='').strip()
+    except Exception:
+        pass
 
-    params = {
-        "reason": "init",
-        "productType": "web-player",
-        "totp": totp,
-        "totpVer": 5,
-        "ts": timestamp,
-    }
-
-    req = requests.get(token_url, headers=headers, params=params, proxies={"https": proxy})
-    if req.status_code != 200:
+    if not client_id or not client_secret:
         raise SpotifyWebsiteParserException(
-            "ERROR: {} gave us not a 200. Instead: {}".format(token_url, req.status_code))
-    token = req.json()
+            "Spotify Client Credentials are required. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET or configure [spotify] client_id/client_secret in settings."
+        )
+
+    try:
+        resp = requests.post(
+            accounts_token_url,
+            data={"grant_type": "client_credentials"},
+            auth=(client_id, client_secret),
+            proxies={"https": proxy} if proxy else None,
+            timeout=10,
+        )
+    except Exception as e:
+        raise SpotifyWebsiteParserException(f"Failed to contact Spotify Accounts API: {e}")
+
+    if resp.status_code != 200:
+        raise SpotifyWebsiteParserException(
+            f"ERROR: {accounts_token_url} gave us not a 200. Instead: {resp.status_code}"
+        )
+
+    j = resp.json()
+    token = {"accessToken": j.get("access_token")}
 
     if url_info['type'] == "playlist":
         url = playlist_base_url.format(url_info["id"])

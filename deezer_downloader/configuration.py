@@ -1,9 +1,36 @@
 import sys
 import os
 from pathlib import Path
-from configparser import ConfigParser
+from configparser import ConfigParser, ParsingError, MissingSectionHeaderError
 
 config = None
+
+
+def _load_config_with_flexible_encoding(config_abs: str) -> ConfigParser:
+    encodings_to_try = [
+        "utf-8",
+        "utf-8-sig",  # handles UTF-8 with BOM
+        "utf-16",
+        "utf-16-le",
+        "utf-16-be",
+    ]
+    last_error = None
+    for enc in encodings_to_try:
+        parser = ConfigParser()
+        try:
+            with open(config_abs, "r", encoding=enc) as f:
+                parser.read_file(f)
+            # basic sanity check: must have at least one non-DEFAULT section
+            if any(k for k in parser.keys() if k != "DEFAULT"):
+                return parser
+        except (UnicodeDecodeError, ParsingError, MissingSectionHeaderError) as e:
+            last_error = e
+            continue
+        except OSError as e:
+            last_error = e
+            break
+    print(f"ERROR: Failed to read config file with supported encodings (utf-8, utf-8-sig, utf-16, utf-16-le, utf-16-be): {config_abs}\nReason: {last_error}")
+    sys.exit(1)
 
 
 def load_config(config_abs):
@@ -13,10 +40,13 @@ def load_config(config_abs):
         print(f"Could not find config file: {config_abs}")
         sys.exit(1)
 
-    config = ConfigParser()
-    config.read(config_abs)
+    # Try multiple encodings to support files saved as UTF-16 (e.g., by some Windows editors)
+    config = _load_config_with_flexible_encoding(config_abs)
 
-    assert list(config.keys()) == ['DEFAULT', 'mpd', 'download_dirs', 'debug', 'http', 'proxy', 'threadpool', 'deezer', 'youtubedl'], f"Validating config file failed. Check {config_abs}"
+    required_sections = {'mpd', 'download_dirs', 'debug', 'http', 'proxy', 'threadpool', 'deezer', 'youtubedl'}
+    present_sections = set(k for k in config.keys() if k != 'DEFAULT')
+    assert required_sections.issubset(present_sections), f"Validating config file failed. Check {config_abs}"
+    # Optional sections are allowed, e.g. 'spotify'
 
     if config['mpd'].getboolean('use_mpd'):
         if not config['mpd']['music_dir_root'].startswith(config['download_dirs']['base']):

@@ -229,8 +229,10 @@ def download_deezer_playlist_and_queue_and_zip(playlist_id, add_to_playlist, cre
 
 @sched.register_command()
 def download_spotify_playlist_and_queue_and_zip(playlist_name, playlist_id, add_to_playlist, create_zip):
-    songs = get_songs_from_spotify_website(playlist_id,
-                                           config["proxy"]["server"])
+    songs = get_songs_from_spotify_website(
+        playlist_id,
+        config["proxy"]["server"]
+    )
     songs_absolute_location = []
     print(f"We got {len(songs)} songs from the Spotify playlist")
     for i, song_of_playlist in enumerate(songs):

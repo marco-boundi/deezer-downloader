@@ -56,4 +56,11 @@ quality = mp3
 ; command = /home/kmille/projects/deezer-downloader/app/venv/bin/yt-dlp
 command = /usr/bin/yt-dlp
 
+[spotify]
+; Official Spotify Web API Client Credentials (required)
+; Create an app at https://developer.spotify.com/dashboard
+; Then set either here or via env SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET
+; client_id =
+; client_secret =
+
 ; vim: syntax=dosini
