@@ -617,7 +617,7 @@ def deezer_search(search, search_type):
             if search_type == TYPE_ALBUM_TRACK:
                 data = get_song_infos_from_deezer_website(TYPE_ALBUM, search)
             else:
-                resp = session.get("https://api.deezer.com/search/{}?q={}".format(search_type, search))
+                resp = session.get("https://api.deezer.com/search/{}?q={}&limit=100".format(search_type, search))
                 resp.raise_for_status()
                 data = resp.json()
                 data = data['data']
