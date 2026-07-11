@@ -141,6 +141,17 @@ a:hover {
     border: 1px solid #444;
 }
 
+/* Custom checkbox styling for dark mode */
+.custom-control-label::before {
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+}
+
+.custom-checkbox .custom-control-input:checked ~ .custom-control-label::before {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
 /* Autoindex page */
 .__autoindex__ {
     background-color: #121212;

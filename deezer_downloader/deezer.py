@@ -598,15 +598,16 @@ def get_song_infos_from_deezer_website(search_type, id):
     raise DeezerApiException(f"Could not get info for '{id}' after {max_retries} attempts: {last_exception}") from last_exception
 
 
-def deezer_search(search, search_type):
-    # search: string (What are you looking for?)
+def deezer_search(search_query, search_type, strict=False):
+    # search_query: string (What are you looking for?)
     # search_type: either one of the constants: TYPE_TRACK|TYPE_ALBUM|TYPE_ALBUM_TRACK (TYPE_PLAYLIST is not supported)
     # return: list of dicts (keys depend on search_type)
 
     if search_type not in [TYPE_TRACK, TYPE_ALBUM, TYPE_ALBUM_TRACK]:
         print("ERROR: search_type is wrong: {}".format(search_type))
         return []
-    search = urllib.parse.quote_plus(search)
+
+    search = urllib.parse.quote_plus(search_query)
 
     max_retries = 3
     retry_delay = 1  # seconds
@@ -615,7 +616,7 @@ def deezer_search(search, search_type):
     for attempt in range(max_retries):
         try:
             if search_type == TYPE_ALBUM_TRACK:
-                data = get_song_infos_from_deezer_website(TYPE_ALBUM, search)
+                data = get_song_infos_from_deezer_website(TYPE_ALBUM, search_query)
             else:
                 resp = session.get("https://api.deezer.com/search/{}?q={}&limit=100".format(search_type, search))
                 resp.raise_for_status()
@@ -627,16 +628,16 @@ def deezer_search(search, search_type):
             last_exception = e
             # Only retry on connection errors
             if isinstance(e, requests.exceptions.ConnectionError) and attempt < max_retries - 1:
-                print(f"Connection error when searching for '{search}'. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                print(f"Connection error when searching for '{search_query}'. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
                 import time
                 time.sleep(retry_delay)
             else:
                 # If it's not a connection error or we've exhausted our retries, raise the exception
-                raise DeezerApiException(f"Could not search for track '{search}': {e}") from e
+                raise DeezerApiException(f"Could not search for track '{search_query}': {e}") from e
     else:
         # This will only execute if the for loop completes without a break
         # This means all retries failed
-        raise DeezerApiException(f"Could not search for track '{search}' after {max_retries} attempts: {last_exception}") from last_exception
+        raise DeezerApiException(f"Could not search for track '{search_query}' after {max_retries} attempts: {last_exception}") from last_exception
     return_nice = []
     for item in data:
         i = {}
@@ -671,6 +672,40 @@ def deezer_search(search, search_type):
             i['preview_url'] = next(media['HREF'] for media in item['MEDIA'] if media['TYPE'] == 'preview')
 
         return_nice.append(i)
+
+    if search_type in [TYPE_TRACK, TYPE_ALBUM]:
+        def get_score(item):
+            sq = search_query.lower().strip()
+            title = item['title'].lower()
+            album = item['album'].lower()
+            artist = item['artist'].lower()
+
+            # Exact match of title or album
+            if search_type == TYPE_TRACK and title == sq:
+                return 0
+            if search_type == TYPE_ALBUM and album == sq:
+                return 0
+
+            # Match with both artist and title/album if query contains " - "
+            if " - " in sq:
+                parts = sq.split(" - ", 1)
+                if (parts[0] in artist and (parts[1] in title or parts[1] in album)) or \
+                   (parts[0] in (title or album) and parts[1] in artist):
+                    return 1
+
+            # All words present as whole words
+            words = sq.split()
+            combined = f"{title} {album} {artist}"
+            if all(re.search(r'\b' + re.escape(word) + r'\b', combined) for word in words):
+                return 2
+
+            return 3
+
+        return_nice.sort(key=get_score)
+
+        if strict:
+            return_nice = [item for item in return_nice if get_score(item) <= 2]
+
     return return_nice
 
 

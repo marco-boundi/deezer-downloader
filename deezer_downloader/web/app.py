@@ -57,6 +57,9 @@ def validate_schema(*parameters_to_check):
             if "create_zip" in j.keys():
                 if type(j['create_zip']) is not bool:
                     return jsonify({"error": "create_zip must be a boolean"}), 400
+            if "strict" in j.keys():
+                if type(j['strict']) is not bool:
+                    return jsonify({"error": "strict must be a boolean"}), 400
             if "query" in j.keys():
                 if type(j['query']) is not str:
                     return jsonify({"error": "query is not a string"}), 400
@@ -142,18 +145,19 @@ def show_queue():
 
 
 @app.route('/search', methods=['POST'])
-@validate_schema("type", "query")
+@validate_schema("type", "query", "strict")
 def search():
     """
     searches for available music in the Deezer library
     para:
         type: track|album|album_track
         query: search query
+        strict: True|False
     return:
         json: [ { artist, id, (title|album) } ]
     """
     user_input = request.get_json(force=True)
-    results = deezer_search(user_input['query'], user_input['type'])
+    results = deezer_search(user_input['query'], user_input['type'], user_input['strict'])
     return jsonify(results)
 
 

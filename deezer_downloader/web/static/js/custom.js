@@ -93,7 +93,7 @@ $(document).ready(function() {
 
     function deezer_load_list(type, query) {
         $.post(deezer_downloader_api_root + '/search',
-            JSON.stringify({ type: type, query: query }),
+            JSON.stringify({ type: type, query: query, strict: $('#search-strict').is(':checked') }),
             function(data) {
                 $("#results > tbody").html("");
                 for (var i = 0; i < data.length; i++) {
